@@ -41,7 +41,7 @@ public class OwlClient {
      * @param digest         Digest algorithm
      * @param random         Secure random number generator
      */
-    public void init(byte[] serverIdentity, BigInteger n, ECPoint G, Digest digest, SecureRandom random) {
+    public OwlClient(byte[] serverIdentity, BigInteger n, ECPoint G, Digest digest, SecureRandom random) {
         this.serverIdentity = serverIdentity;
         this.n = n;
         this.G = G;
@@ -111,7 +111,7 @@ public class OwlClient {
     public OwlClientFinalValues finalizeLogin(InitialLoginResponse response) throws CryptoException {
         // Check the initialLogin has been called before continuing
         if (!clientInitialized) {
-            throw new CryptoException("Cannot finalize login before initial login");
+            throw new OwlUninitializedClientException("Cannot finalize login before initial login");
         }
         // betaG = X1 + X2 + X3
         ECPoint betaGenerator = X1.add(X2).add(response.getX3());
@@ -119,7 +119,7 @@ public class OwlClient {
         if (!(util.verifyZKP(response.getPI3(), response.getX3(), G, serverIdentity) &&
                 util.verifyZKP(response.getPI4(), response.getX4(), G, serverIdentity) &&
                 util.verifyZKP(response.getPIbeta(), response.getBeta(), betaGenerator, serverIdentity))) {
-            throw new CryptoException("Failed to verify ZKPs");
+            throw new OwlZKPVerificationFailure("Failed to verify ZKPs for x3, x4 and beta");
         }
         // secret = (x2 * pi) mod n
         BigInteger secret = x2.multiply(pi).mod(n);

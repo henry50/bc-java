@@ -27,7 +27,7 @@ public class OwlServer {
      * @param digest         Digest algorithm
      * @param random         Secure random number generator
      */
-    public void init(byte[] serverIdentity, BigInteger n, ECPoint G, Digest digest, SecureRandom random) {
+    public OwlServer(byte[] serverIdentity, BigInteger n, ECPoint G, Digest digest, SecureRandom random) {
         this.serverIdentity = serverIdentity;
         this.n = n;
         this.G = G;
@@ -65,7 +65,7 @@ public class OwlServer {
         // Verify ZKPs for x1 and x2
         if (!(util.verifyZKP(request.getPI1(), request.getX1(), G, identity) &&
                 util.verifyZKP(request.getPI2(), request.getX2(), G, identity))) {
-            throw new CryptoException("Failed to verify ZKPs");
+            throw new OwlZKPVerificationFailure("Failed to verify ZKPs for x1 and x2");
         }
 
         // x4 = [1, n-1]
@@ -110,7 +110,7 @@ public class OwlServer {
 
         // verify ZKP for alpha
         if (!util.verifyZKP(request.getPIalpha(), request.getAlpha(), alphaGenerator, identity)) {
-            throw new CryptoException("Failed to verify ZKPs");
+            throw new OwlZKPVerificationFailure("Failed to verify ZKP for alpha");
         }
         // K = (alpha - (X2 * ((x4 * pi) mod n))) * x4
         ECPoint K = request.getAlpha().subtract(
@@ -127,7 +127,7 @@ public class OwlServer {
         // (G * r) + (T * h) ?= X1
         if (!G.multiply(request.getR()).add(initialValues.getT().multiply(h))
                 .equals(initialValues.getX1())) {
-            throw new CryptoException("Authentication failed");
+            throw new OwlAuthenticationFailure("Authentication failed");
         }
 
         // k = H(K)
