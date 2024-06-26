@@ -7,12 +7,9 @@ import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.jce.spec.ECParameterSpec;
 import org.bouncycastle.math.ec.ECPoint;
-import org.bouncycastle.util.BigIntegers;
 
 /**
- * Implements the client side SRP-6a protocol. Note that this class is stateful, and therefore NOT threadsafe.
- * This implementation of SRP is based on the optimized message sequence put forth by Thomas Wu in the paper
- * "SRP-6: Improvements and Refinements to the Secure Remote Password Protocol, 2002"
+ * Implements the client side Owl protocol.
  */
 public class OwlClient
 {
@@ -35,11 +32,11 @@ public class OwlClient
     protected SecureRandom random;
 
     /**
-     * Initialises the client
+     * Initialises the client using n and G curve parameters
      * @param n Order of the curve
      * @param G Curve generator point
-     * @param digest A digest algorithm
-     * @param random A secure random number generator
+     * @param digest Digest algorithm
+     * @param random Secure random number generator
      */
     public void init(BigInteger n, ECPoint G, Digest digest, SecureRandom random)
     {
@@ -50,33 +47,44 @@ public class OwlClient
         this.util = new OwlUtil(n, digest, random);
     }
 
-    public void init(ECParameterSpec group, Digest digest, SecureRandom random)
+    /**
+     * Initialises the client using an elliptic curve parameter spec
+     * @param spec Elliptic curve specification 
+     * @param digest Digest algorithm
+     * @param random Secure random number generator
+     */
+    public void init(ECParameterSpec spec, Digest digest, SecureRandom random)
     {
-        init(group.getN(), group.getG(), digest, random);
+        init(spec.getN(), spec.getG(), digest, random);
     }
 
     /**
      * Generate client registration values to send to the server
-     * @param identity The user's identity (eg. username)
+     * @param identity The user's identity
      * @param password The user's password
-     * @return ???? TODO
+     * @return Client register message
      */
-    public BigInteger register(byte[] identity, byte[] password)
+    public OwlClientRegisterMessage register(byte[] identity, byte[] password)
     {
-        BigInteger[] tPi = util.getCredentialValues(identity, password);
+        OwlCredentialHashes hashes = util.getCredentialHashes(identity, password);
 
-        ECPoint T = G.multiply(tPi[1]);
+        ECPoint T = G.multiply(hashes.getPi());
 
-        // TODO return [t, pi, T]
-        return BigInteger.ONE;
+        return new OwlClientRegisterMessage(hashes.getT(), hashes.getPi(), T);
     }
 
-    public BigInteger initialLogin(byte[] identity, byte[] password)
+    /**
+     * Generate client initial login values to send to the server
+     * @param identity The user's identity
+     * @param password The user's password
+     * @return Client initial login message
+     */
+    public OwlClientInitialLoginMessage initialLogin(byte[] identity, byte[] password)
     {
         this.identity = identity;
-        BigInteger[] tPi = util.getCredentialValues(identity, password);
-        this.t = tPi[0];
-        this.pi = tPi[1];
+        OwlCredentialHashes hashes = util.getCredentialHashes(identity, password);
+        this.t = hashes.getT();
+        this.pi = hashes.getPi();
 
         this.x1 = util.getRandomInCurve();
         this.X1 = G.multiply(x1);
@@ -87,11 +95,16 @@ public class OwlClient
         this.PI1 = util.createZKP(x1, X1, G, identity);
         this.PI2 = util.createZKP(x2, X2, G, identity);
 
-        // TODO return [X1, X2, PI1, PI2]
-        return BigInteger.ONE;
+        return new OwlClientInitialLoginMessage(X1, X2, PI1, PI2);
     }
 
-    public BigInteger finalizeLogin(ECPoint X3, ECPoint X4, OwlZKP PI3, OwlZKP PI4, ECPoint beta, OwlZKP PIbeta) throws CryptoException
+    /**
+     * Generate client finalize login message to send to the server
+     * @param initialResponse Initial response message from server
+     * @return Object containing derived key and final login message
+     * @throws CryptoException If ZKP verification fails
+     */
+    public OwlClientFinalValues finalizeLogin(ECPoint X3, ECPoint X4, OwlZKP PI3, OwlZKP PI4, ECPoint beta, OwlZKP PIbeta) throws CryptoException
     {
         // TODO make this the actual identity
         byte[] serverIdentity = {0};
@@ -113,7 +126,7 @@ public class OwlClient
         byte[] k = new byte[digest.getDigestSize()];
         digest.doFinal(k, 0);
         
-        // TODO return k, alpha, PIalpha, r
-        return BigInteger.ONE;
+        OwlClientFinalizeLoginMessage finalizeLoginMessage = new OwlClientFinalizeLoginMessage(alpha, PIalpha, r);
+        return new OwlClientFinalValues(k, finalizeLoginMessage);
     }
 }

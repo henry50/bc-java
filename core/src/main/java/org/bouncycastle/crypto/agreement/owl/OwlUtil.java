@@ -68,8 +68,7 @@ public class OwlUtil {
     {
         return BigIntegers.createRandomInRange(BigInteger.ONE, n.subtract(BigInteger.ONE), random);
     }
-    // return pi and t for given credentials
-    public BigInteger[] getCredentialValues(byte[] identity, byte[] password)
+    public OwlCredentialHashes getCredentialHashes(byte[] identity, byte[] password)
     {
         digest.update(identity, 0, identity.length);
         digest.update(password, 0, password.length);
@@ -82,7 +81,7 @@ public class OwlUtil {
         digest.doFinal(output, 0);
         BigInteger pi = new BigInteger(1, output).mod(n);
 
-        return new BigInteger[] {t, pi};
+        return new OwlCredentialHashes(t, pi);
     }
     public BigInteger generateTranscript(
         ECPoint K,
