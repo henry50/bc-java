@@ -56,18 +56,10 @@ public class OwlUtil {
      * @return True if the ZKP if valid, false otherwise
      */
     public boolean verifyZKP(OwlZKP zkp, ECPoint X, ECPoint G, byte[] proverIdentity) {
-        // Check X != infinity
-        if (X.isInfinity()) {
+        // Check X is valid
+        if (!X.isValid()) {
             return false;
         }
-        // Check x and y coordinates are in Fq
-        // TODO
-
-        // Check X lies on the curve
-        // TODO
-
-        // check that hX = infinity
-        // TODO if (X.multiply(h).isInfinity())
 
         // check if V = G*r + X*h
         ECPoint V = G.multiply(zkp.getR()).add(X.multiply(zkp.getH()));
