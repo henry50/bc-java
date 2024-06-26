@@ -14,7 +14,7 @@ public class OwlCredentialHashes {
         this.pi = pi;
     }
 
-    public BigInteger getT() {
+    public BigInteger gett() {
         return t;
     }
 

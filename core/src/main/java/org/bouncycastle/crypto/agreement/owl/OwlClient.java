@@ -9,7 +9,6 @@ import org.bouncycastle.crypto.agreement.owl.messages.FinalizeLoginRequest;
 import org.bouncycastle.crypto.agreement.owl.messages.InitialLoginRequest;
 import org.bouncycastle.crypto.agreement.owl.messages.InitialLoginResponse;
 import org.bouncycastle.crypto.agreement.owl.messages.RegisterRequest;
-import org.bouncycastle.jce.spec.ECParameterSpec;
 import org.bouncycastle.math.ec.ECPoint;
 
 /**
@@ -22,6 +21,7 @@ public class OwlClient {
     private OwlUtil util;
 
     // Values created during initial login and used in finalize login
+    private boolean clientInitialized = false;
     private byte[] identity;
     private BigInteger t;
     private BigInteger pi;
@@ -49,18 +49,6 @@ public class OwlClient {
     }
 
     /**
-     * Initialises the client using an elliptic curve parameter spec
-     * 
-     * @param serverIdentity The server's identity
-     * @param spec           Elliptic curve specification
-     * @param digest         Digest algorithm
-     * @param random         Secure random number generator
-     */
-    public void init(byte[] serverIdentity, ECParameterSpec spec, Digest digest, SecureRandom random) {
-        init(serverIdentity, spec.getN(), spec.getG(), digest, random);
-    }
-
-    /**
      * Generate client registration values to send to the server
      * 
      * @param identity The user's identity
@@ -68,11 +56,14 @@ public class OwlClient {
      * @return Client register message
      */
     public RegisterRequest register(byte[] identity, byte[] password) {
+        // t = H(U || w) mod n
+        // pi = H(t) mod n
         OwlCredentialHashes hashes = util.getCredentialHashes(identity, password);
 
-        ECPoint T = G.multiply(hashes.getPi());
+        // T = G * t
+        ECPoint T = G.multiply(hashes.gett());
 
-        return new RegisterRequest(hashes.getT(), hashes.getPi(), T);
+        return new RegisterRequest(hashes.gett(), hashes.getPi(), T);
     }
 
     /**
@@ -84,18 +75,28 @@ public class OwlClient {
      */
     public InitialLoginRequest initialLogin(byte[] identity, byte[] password) {
         this.identity = identity;
+        // t = H(U || w) mod n
+        // pi = H(t) mod n
         OwlCredentialHashes hashes = util.getCredentialHashes(identity, password);
-        this.t = hashes.getT();
+        this.t = hashes.gett();
         this.pi = hashes.getPi();
 
+        // x1 = [1, n-1]
         this.x1 = util.getRandomInCurve();
+        // X1 = G * x1
         this.X1 = G.multiply(x1);
 
+        // x2 = [1, n-1]
         this.x2 = util.getRandomInCurve();
+        // X2 = G * x2
         this.X2 = G.multiply(x2);
 
+        // PI1 = ZKP{x1}
         this.PI1 = util.createZKP(x1, X1, G, identity);
+        // PI2 = ZKP{x2}
         this.PI2 = util.createZKP(x2, X2, G, identity);
+
+        clientInitialized = true;
 
         return new InitialLoginRequest(X1, X2, PI1, PI2);
     }
@@ -108,6 +109,11 @@ public class OwlClient {
      * @throws CryptoException If ZKP verification fails
      */
     public OwlClientFinalValues finalizeLogin(InitialLoginResponse response) throws CryptoException {
+        // Check the initialLogin has been called before continuing
+        if (!clientInitialized) {
+            throw new CryptoException("Cannot finalize login before initial login");
+        }
+        // betaG = X1 + X2 + X3
         ECPoint betaGenerator = X1.add(X2).add(response.getX3());
         // verify ZKPs for X3, X4 and beta
         if (!(util.verifyZKP(response.getPI3(), response.getX3(), G, serverIdentity) &&
@@ -115,17 +121,26 @@ public class OwlClient {
                 util.verifyZKP(response.getPIbeta(), response.getBeta(), betaGenerator, serverIdentity))) {
             throw new CryptoException("Failed to verify ZKPs");
         }
+        // secret = (x2 * pi) mod n
+        BigInteger secret = x2.multiply(pi).mod(n);
+        // alphaG = X1 + X3 + X4
         ECPoint alphaGenerator = X1.add(response.getX3()).add(response.getX4());
-        ECPoint alpha = alphaGenerator.multiply(x2.multiply(pi));
-        OwlZKP PIalpha = util.createZKP(x2.multiply(pi), alpha, alphaGenerator, identity);
+        // alpha = alphaG * secret
+        ECPoint alpha = alphaGenerator.multiply(secret);
+        // PIalpha = ZKP{secret}
+        OwlZKP PIalpha = util.createZKP(secret, alpha, alphaGenerator, identity);
 
-        ECPoint K = response.getBeta().subtract(response.getX4().multiply(x2.multiply(pi))).multiply(x2);
+        // K = (beta - (X4 * secret)) * x2
+        ECPoint K = response.getBeta().subtract(response.getX4().multiply(secret)).multiply(x2);
 
+        // h = H(K || Transcript)
         BigInteger h = util.generateTranscript(K, identity, X1, X2, PI1, PI2, serverIdentity, response.getX3(),
                 response.getX4(), response.getPI3(), response.getPI4(), response.getBeta(),
                 response.getPIbeta(), alpha, PIalpha);
-        
+
+        // r = x1 - (t * h) mod n
         BigInteger r = x1.subtract(t.multiply(h)).mod(n);
+        // k = H(K)
         byte[] k = util.getFinalKey(K);
 
         FinalizeLoginRequest finalizeLoginRequest = new FinalizeLoginRequest(alpha, PIalpha, r);
