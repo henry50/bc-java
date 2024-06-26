@@ -1,29 +1,29 @@
-package org.bouncycastle.crypto.agreement.owl;
+package org.bouncycastle.crypto.agreement.owl.messages;
 
 import java.math.BigInteger;
 
 import org.bouncycastle.math.ec.ECPoint;
 
-public class OwlClientRegisterMessage {
+public class RegisterRequest {
     private BigInteger t;
     private BigInteger pi;
     private ECPoint T;
-    public OwlClientRegisterMessage(BigInteger t, BigInteger pi, ECPoint T)
-    {
+
+    public RegisterRequest(BigInteger t, BigInteger pi, ECPoint T) {
         this.t = t;
         this.pi = pi;
         this.T = T;
     }
-    public BigInteger gett()
-    {
+
+    public BigInteger gett() {
         return this.t;
     }
-    public BigInteger getPi()
-    {
+
+    public BigInteger getPi() {
         return this.pi;
     }
-    public ECPoint getT()
-    {
+
+    public ECPoint getT() {
         return this.T;
     }
 }

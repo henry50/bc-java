@@ -11,13 +11,24 @@ public class OwlUtil {
     BigInteger n;
     Digest digest;
     SecureRandom random;
-    public OwlUtil(BigInteger n, Digest digest, SecureRandom random){
+
+    public OwlUtil(BigInteger n, Digest digest, SecureRandom random) {
         this.n = n;
         this.digest = digest;
         this.random = random;
     }
-    public OwlZKP createZKP(BigInteger x, ECPoint X, ECPoint G, byte[] identity)
-    {
+
+    /**
+     * Generate a ZKP for the given scalar, public key, generator and prover
+     * identity
+     * 
+     * @param x              Scalar value to prove knowledge of
+     * @param X              Public key for the scalar using the given generator
+     * @param G              Generator
+     * @param proverIdentity Identity of the prover
+     * @return A ZKP object
+     */
+    public OwlZKP createZKP(BigInteger x, ECPoint X, ECPoint G, byte[] proverIdentity) {
         BigInteger v = getRandomInCurve();
         ECPoint V = G.multiply(v);
         byte[] Gb = G.getEncoded(true);
@@ -26,7 +37,7 @@ public class OwlUtil {
         digest.update(Gb, 0, Gb.length);
         digest.update(Vb, 0, Vb.length);
         digest.update(Xb, 0, Xb.length);
-        digest.update(identity, 0, identity.length);
+        digest.update(proverIdentity, 0, proverIdentity.length);
         byte[] output = new byte[digest.getDigestSize()];
         digest.doFinal(output, 0);
         BigInteger h = new BigInteger(1, output);
@@ -34,20 +45,24 @@ public class OwlUtil {
         BigInteger r = v.subtract(x.multiply(h)).mod(n);
         return new OwlZKP(h, r);
     }
-    public boolean verifyZKP(OwlZKP zkp, ECPoint G, ECPoint X, BigInteger q, byte[] proverIdentity)
-    {
+
+    /**
+     * Verify a ZKP for a given public key, generator and prover identity
+     * 
+     * @param zkp            ZKP to verify
+     * @param X              Public key
+     * @param G              Generator
+     * @param proverIdentity Identity of the prover
+     * @return True if the ZKP if valid, false otherwise
+     */
+    public boolean verifyZKP(OwlZKP zkp, ECPoint X, ECPoint G, byte[] proverIdentity) {
         // Check X != infinity
         if (X.isInfinity()) {
             return false;
         }
         // Check x and y coordinates are in Fq
-        if (X.normalize().getXCoord().toBigInteger().compareTo(BigInteger.ZERO) == -1 ||
-            X.normalize().getXCoord().toBigInteger().compareTo(q.subtract(BigInteger.ONE)) == 1 ||
-            X.normalize().getYCoord().toBigInteger().compareTo(BigInteger.ZERO) == -1 ||
-            X.normalize().getYCoord().toBigInteger().compareTo(q.subtract(BigInteger.ONE)) == 1)
-        {
-            return false;
-        }
+        // TODO
+
         // Check X lies on the curve
         // TODO
 
@@ -64,12 +79,24 @@ public class OwlUtil {
         digest.doFinal(output, 0);
         return zkp.getH().equals(new BigInteger(1, output));
     }
-    public BigInteger getRandomInCurve()
-    {
+
+    /**
+     * Get a random scalar within the order of the curve
+     * 
+     * @return Random scalar
+     */
+    public BigInteger getRandomInCurve() {
         return BigIntegers.createRandomInRange(BigInteger.ONE, n.subtract(BigInteger.ONE), random);
     }
-    public OwlCredentialHashes getCredentialHashes(byte[] identity, byte[] password)
-    {
+
+    /**
+     * Finds the hash values t and pi given the user identity and password
+     * 
+     * @param identity The user's identity
+     * @param password The user's password
+     * @return Object containing t and pi values
+     */
+    public OwlCredentialHashes getCredentialHashes(byte[] identity, byte[] password) {
         digest.update(identity, 0, identity.length);
         digest.update(password, 0, password.length);
         byte[] output = new byte[digest.getDigestSize()];
@@ -83,24 +110,56 @@ public class OwlUtil {
 
         return new OwlCredentialHashes(t, pi);
     }
+
+    /**
+     * Derive the final key from point K
+     * 
+     * @param K Elliptic curve point
+     * @return Derived key
+     */
+    public byte[] getFinalKey(ECPoint K) {
+        digest.update(K.getEncoded(true), 0, K.getEncodedLength(true));
+        byte[] k = new byte[digest.getDigestSize()];
+        digest.doFinal(k, 0);
+        return k;
+    }
+
+    /**
+     * Generate the protocol transcript
+     * 
+     * @param K
+     * @param userIdentity
+     * @param X1
+     * @param X2
+     * @param PI1
+     * @param PI2
+     * @param serverIdentity
+     * @param X3
+     * @param X4
+     * @param PI3
+     * @param PI4
+     * @param beta
+     * @param PIbeta
+     * @param alpha
+     * @param PIalpha
+     * @return Hash output as a BigInteger
+     */
     public BigInteger generateTranscript(
-        ECPoint K,
-        byte[] userIdentity,
-        ECPoint X1,
-        ECPoint X2,
-        OwlZKP PI1,
-        OwlZKP PI2,
-        byte[] serverIdentity,
-        ECPoint X3,
-        ECPoint X4,
-        OwlZKP PI3,
-        OwlZKP PI4,
-        ECPoint beta,
-        OwlZKP PIbeta,
-        ECPoint alpha,
-        OwlZKP PIalpha
-    )
-    {
+            ECPoint K,
+            byte[] userIdentity,
+            ECPoint X1,
+            ECPoint X2,
+            OwlZKP PI1,
+            OwlZKP PI2,
+            byte[] serverIdentity,
+            ECPoint X3,
+            ECPoint X4,
+            OwlZKP PI3,
+            OwlZKP PI4,
+            ECPoint beta,
+            OwlZKP PIbeta,
+            ECPoint alpha,
+            OwlZKP PIalpha) {
         digest.update(K.getEncoded(true), 0, K.getEncodedLength(true));
         digest.update(userIdentity, 0, userIdentity.length);
         digest.update(X1.getEncoded(true), 0, X1.getEncodedLength(true));
